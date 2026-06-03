@@ -20,9 +20,13 @@
   .logo span { color: var(--text); }
   .tagline { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .main { display: flex; flex: 1; min-height: 0; overflow: hidden; }
-  .sidebar { width: 340px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; flex-shrink: 0; overflow: hidden; }
-  .sidebar-form { flex-shrink: 0; overflow-y: auto; }
-  .sidebar-results { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar {
+    width: 340px; background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; min-height: 0; flex-shrink: 0;
+    overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
+  }
+  .sidebar-form { flex-shrink: 0; }
+  .sidebar-results { flex-shrink: 0; display: flex; flex-direction: column; }
   .section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
   .section-title { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 2px; margin-bottom: 10px; }
   .input-group { display: flex; flex-direction: column; gap: 8px; }
@@ -68,7 +72,7 @@
   .turn-tabs { display: flex; gap: 6px; padding: 8px 16px 0; flex-shrink: 0; }
   .turn-tab { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel2); color: var(--muted); font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
   .turn-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(240,165,0,0.12); }
-  .turns-list { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px 16px 24px; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+  .turns-list { flex-shrink: 0; padding: 10px 16px 32px; }
   .turn-card { background: var(--panel2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
   .turn-card:hover, .turn-card.active { border-color: var(--accent); }
   .turn-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
