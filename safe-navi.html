@@ -99,6 +99,14 @@
   .leg-low::before { background: #eab308; }
   .leg-mid::before { background: #f0a500; }
   .leg-high::before { background: #ef4444; }
+  .leaflet-popup.acc-popup .leaflet-popup-content-wrapper {
+    background: #161b22; color: #e6edf3; border: 1px solid #30363d; border-radius: 10px;
+  }
+  .leaflet-popup.acc-popup .leaflet-popup-tip { background: #161b22; border: 1px solid #30363d; }
+  .leaflet-popup.acc-popup .leaflet-popup-close-button { color: #e6edf3; }
+  .acc-popup-inner { font-size: 12px; line-height: 1.55; }
+  .acc-popup-meta { color: #8b949e; font-size: 11px; }
+  .acc-popup-hints { margin: 8px 0 0 1.1em; padding: 0; color: #8b949e; font-size: 11px; }
   #map { width: 100%; height: 100%; min-height: 280px; background: #1a2332; }
   .practice-panel { position: absolute; inset: 12px; z-index: 900; background: rgba(13,17,23,0.97); border: 1px solid var(--border); border-radius: 16px; padding: 18px; display: none; flex-direction: column; overflow-y: auto; }
   .practice-panel.open { display: flex; }
@@ -807,7 +815,10 @@ async function searchRoute() {
     const route = await fetchRoute(startCoord, goalCoord);
     const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
     state.routeCoords = coords;
-    state.routeLayer = L.polyline(coords, { color: '#f0a500', weight: 6, opacity: 0.9 }).addTo(map);
+    state.routeLayer = L.polyline(coords, {
+      color: '#f0a500', weight: 6, opacity: 0.9, interactive: false,
+    }).addTo(map);
+    AccidentMap.bringAboveRoute();
     map.fitBounds(state.routeLayer.getBounds(), { padding: [40, 40] });
 
     const steps = route.legs[0].steps;
