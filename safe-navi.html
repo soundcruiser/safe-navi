@@ -14,7 +14,7 @@
     --text: #e6edf3; --muted: #8b949e; --border: #30363d; --radius: 12px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
   header { background: var(--panel); border-bottom: 2px solid var(--accent); padding: 10px 16px; flex-shrink: 0; }
   .logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--accent); letter-spacing: 3px; }
   .logo span { color: var(--text); }
@@ -104,6 +104,39 @@
   .start-marker-inner { background: var(--safe); }
   .end-marker-inner { background: var(--danger); }
   .custom-turn-marker { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+  .school-banner { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
+  .preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .preset-btn { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .bounds-warn { display: none; font-size: 11px; color: #fca5a5; margin-top: 6px; }
+  .bounds-warn.show { display: block; }
+  .acc-block { margin: 8px 0; padding: 8px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; font-size: 11px; }
+  .acc-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-weight: 700; margin-bottom: 6px; }
+  .acc-low { background: rgba(240,165,0,0.2); color: var(--accent); }
+  .acc-mid { background: rgba(249,115,22,0.25); color: #fb923c; }
+  .acc-high { background: rgba(239,68,68,0.25); color: #fca5a5; }
+  .acc-hints { margin-left: 1.1em; color: var(--muted); line-height: 1.5; }
+  .acc-instructor { margin-top: 6px; color: #a5b4fc; }
+  .toolbar-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .toolbar-row button { flex: 1; min-width: 90px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .legal-footer { padding: 12px 16px; font-size: 10px; color: var(--muted); line-height: 1.55; border-top: 1px solid var(--border); background: var(--panel); flex-shrink: 0; }
+  .legal-footer a { color: #93c5fd; }
+  .goal-hint { display: none; font-size: 11px; color: #a5b4fc; margin-top: 6px; line-height: 1.45; }
+  .goal-hint.show { display: block; }
+  body.simple-mode .adv-option { display: none !important; }
+  body.large-text .turn-cue, body.large-text .turn-landmark { font-size: 15px; }
+  body.large-text .practice-landmark { font-size: 18px; }
+  body.large-text .practice-title { font-size: 26px; }
+  .practice-acc { margin: 10px 0; text-align: left; }
+  @media print {
+    header, .loading-bar, .search-btn, .preset-row, .toolbar-row, .turn-tabs, .turn-link-btn, .practice-nav, .practice-close, .modal-overlay, .legal-footer a { display: none !important; }
+    body { background: #fff; color: #000; height: auto; overflow: visible; }
+    .main { flex-direction: column; height: auto; }
+    .sidebar { width: 100%; max-height: none; overflow: visible; }
+    .map-wrap { display: none; }
+    .turn-card { break-inside: avoid; border: 1px solid #ccc; }
+    .acc-block { border-color: #999; }
+  }
   @media (max-width: 600px) { .sidebar { width: 100%; max-height: 45vh; } .main { flex-direction: column; } }
 </style>
 </head>
@@ -115,6 +148,11 @@
 </header>
 <div class="main">
   <div class="sidebar">
+    <div class="section">
+      <div class="section-title">🏫 定番ルート</div>
+      <p class="school-banner" id="schoolBanner">教習エリアを読み込み中…</p>
+      <div class="preset-row" id="presetRow"></div>
+    </div>
     <div class="section">
       <div class="section-title">📍 ルート</div>
       <div class="input-group">
@@ -143,9 +181,13 @@
           <div class="option-label"><strong>曲がり角に目印</strong>曲がる側の施設を優先</div>
           <label class="toggle"><input type="checkbox" id="toggleLandmark" checked><div class="toggle-track"></div></label>
         </div>
-        <div class="option-row">
+        <div class="option-row adv-option">
           <div class="option-label"><strong>学校周辺を抑えた候補</strong>ルート候補の簡易安全度</div>
           <label class="toggle"><input type="checkbox" id="toggleSaferRoute" checked><div class="toggle-track"></div></label>
+        </div>
+        <div class="option-row adv-option">
+          <div class="option-label"><strong>事故記録の少ない候補</strong>警察庁データに基づく</div>
+          <label class="toggle"><input type="checkbox" id="toggleAccidentRoute" checked><div class="toggle-track"></div></label>
         </div>
       </div>
     </div>
@@ -157,7 +199,14 @@
       <div class="value-banner">
         <strong>安全到着の3層：</strong>①ここで曲がりと目印を覚える → ②本番はナビに任せる → ③到着前に目的地周辺を確認
       </div>
+      <div class="toolbar-row">
+        <button type="button" onclick="toggleSimpleMode()">簡易表示</button>
+        <button type="button" onclick="toggleLargeText()">文字大</button>
+        <button type="button" onclick="window.print()">印刷</button>
+      </div>
       <button class="search-btn" id="searchBtn" onclick="searchRoute()">🔍 ルートを調べる</button>
+      <div class="bounds-warn" id="boundsWarn">目的地が教習エリア外です。指導員に確認してください。</div>
+      <div class="goal-hint" id="goalHint"></div>
       <div class="error-msg" id="errorMsg"></div>
     </div>
     <div class="section route-actions" id="routeActions">
@@ -200,6 +249,7 @@
       <div class="practice-road" id="practiceRoad">—</div>
       <img class="practice-map" id="practiceMap" src="" alt="交差点">
       <img class="landmark-photo" id="practicePhoto" style="display:none" alt="目印">
+      <div class="practice-acc" id="practiceAcc"></div>
       <div class="practice-landmark" id="practiceLandmark">—</div>
       <div class="practice-nav">
         <button type="button" onclick="practiceStep(-1)">← 前</button>
@@ -209,6 +259,7 @@
     </div>
   </div>
 </div>
+<footer class="legal-footer" id="legalFooter">データを読み込み中…</footer>
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
   <div class="modal-box">
     <div class="modal-title" id="modalTitle">📸 目印</div>
@@ -216,8 +267,9 @@
     <button class="modal-close" onclick="closeModal()">閉じる</button>
   </div>
 </div>
+<script src="js/school.js"></script>
 <script>
-const map = L.map('map', { center: [35.082, 137.156], zoom: 13 });
+const map = L.map('map', { center: [35.0879, 137.1568], zoom: 14 });
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
   attribution: '© OSM © CARTO', maxZoom: 20, subdomains: 'abcd',
 }).addTo(map);
@@ -226,8 +278,36 @@ window.addEventListener('load', () => setTimeout(() => map.invalidateSize(), 100
 let state = {
   startLatLng: null, goalLatLng: null, startLabel: '', goalLabel: '',
   routeLayer: null, routeCoords: [], markerLayers: [],
-  turnData: [], listMode: 'key', practiceIdx: 0,
+  turnData: [], listMode: 'key', practiceIdx: 0, simpleMode: false,
 };
+
+function toggleSimpleMode() {
+  state.simpleMode = !state.simpleMode;
+  document.body.classList.toggle('simple-mode', state.simpleMode);
+}
+function toggleLargeText() {
+  document.body.classList.toggle('large-text');
+}
+function checkBounds(lat, lng, label) {
+  const ok = School.inBounds(lat, lng);
+  const w = document.getElementById('boundsWarn');
+  if (!ok) {
+    w.textContent = `「${label}」は教習エリア（約${School.pack?.radiusKm || 5}km）外です。指導員に確認してください。`;
+    w.classList.add('show');
+  } else if (!School.inBounds(state.startLatLng?.lat, state.startLatLng?.lng) || !School.inBounds(state.goalLatLng?.lat, state.goalLatLng?.lng)) {
+    w.classList.add('show');
+  } else {
+    w.classList.remove('show');
+  }
+  return ok;
+}
+function applyPackLandmarkToTurn(turn) {
+  const plm = School.packLandmark(turn);
+  if (!plm) return false;
+  turn.landmark = plm;
+  turn.turnCue = plm._pack.cue || formatTurnCue(turn, plm._pack.name);
+  return true;
+}
 
 function setLoading(pct) { document.getElementById('loadingBar').style.width = pct + '%'; }
 function showError(msg) {
@@ -303,23 +383,26 @@ async function countSchoolsNearRoute(route) {
     return ids.size;
   } catch { return 0; }
 }
-async function pickBestRoute(routes, minT, wide, preferSafer) {
-  if (!minT && !wide && !preferSafer) return routes[0];
-  if (!preferSafer || routes.length < 2) {
-    return routes.reduce((a, r) => scoreRoute(r, wide) < scoreRoute(a, wide) ? r : a, routes[0]);
-  }
+function totalRouteScore(route, wide, schools, accidentPts) {
+  return scoreRoute(route, wide) + schools * 8 + accidentPts * 2;
+}
+async function pickBestRoute(routes, minT, wide, preferSafer, preferAccident) {
+  const useAcc = preferAccident && School.accidents?.clusters?.length;
+  if (!minT && !wide && !preferSafer && !useAcc) return routes[0];
   const scored = await Promise.all(routes.map(async r => ({
     route: r,
     base: scoreRoute(r, wide),
-    schools: await countSchoolsNearRoute(r),
+    schools: preferSafer ? await countSchoolsNearRoute(r) : 0,
+    accidents: useAcc ? School.routeAccidentScore(r, m => getArrowFromManeuver(m)) : 0,
   })));
-  scored.sort((a, b) => (a.base + a.schools * 8) - (b.base + b.schools * 8));
+  scored.sort((a, b) => totalRouteScore(a.route, wide, a.schools, a.accidents) - totalRouteScore(b.route, wide, b.schools, b.accidents));
   return scored[0].route;
 }
 async function fetchRoute(start, goal) {
   const alt = document.getElementById('toggleMinTurns').checked
     || document.getElementById('toggleWideRoad').checked
-    || document.getElementById('toggleSaferRoute').checked;
+    || document.getElementById('toggleSaferRoute').checked
+    || document.getElementById('toggleAccidentRoute').checked;
   const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${goal.lng},${goal.lat}?overview=full&geometries=geojson&steps=true&alternatives=${alt}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('ルート計算に失敗しました');
@@ -330,6 +413,7 @@ async function fetchRoute(start, goal) {
     document.getElementById('toggleMinTurns').checked,
     document.getElementById('toggleWideRoad').checked,
     document.getElementById('toggleSaferRoute').checked,
+    document.getElementById('toggleAccidentRoute').checked,
   );
 }
 
@@ -429,6 +513,7 @@ function relativeBearing(fromDeg, toDeg) {
 }
 function landmarkName(turn) {
   if (!turn.landmark) return '';
+  if (turn.landmark._pack?.name) return turn.landmark._pack.name;
   const t = turn.landmark.tags || {};
   return t.name || t.amenity || t.shop || '';
 }
@@ -490,7 +575,8 @@ function renderSafetyPanel(turns, schoolNearCount) {
     ...buildTimeHints(),
   ];
   if (schoolNearCount > 0) items.push(`学校・幼稚園が曲がり付近に ${schoolNearCount} か所 — 減速・歩行者注意`);
-  items.push('事故多発地点の公式データは <a href="https://www.npa.go.jp/publications/statistics/koutsuu/opendata/index_opendata.html" target="_blank" rel="noopener">警察庁オープンデータ</a> で別途確認できます');
+  const accOnRoute = turns.filter(t => t.accident).length;
+  if (accOnRoute) items.push(`ルート上で事故記録クラスタが近い曲がりが ${accOnRoute} か所あります（下の各カードを確認）`);
   ul.innerHTML = items.map(t => `<li>${t}</li>`).join('');
   document.getElementById('safetyPanel').classList.add('visible');
 }
@@ -523,11 +609,13 @@ function renderTurnsList(turns) {
       photoHtml = '<div class="img-placeholder">📷 写真を探しています…</div>';
     }
     const warn = turn.nearSchool ? '<div class="turn-warn">⚠ 学校・幼稚園付近</div>' : '';
+    const accHtml = turn.accident ? School.accidentBlockHtml(turn.accident) : '';
     card.innerHTML = `
       <div class="turn-card-head"><div class="turn-num">${num}</div><div class="turn-card-title">${turn.arrow.emoji} ${turn.arrow.label}</div></div>
       <div class="turn-cue">${cue}</div>
       <div class="turn-card-meta">${turn.instruction}</div>
       ${warn}
+      ${accHtml}
       <img class="turn-card-map" src="${staticMapUrl(turn.lat, turn.lng)}" alt="地図" loading="lazy" onerror="this.replaceWith(imgFailMsg('地図'))">
       <div class="turn-landmark">${lm ? '📍 目印: <strong>' + lm + '</strong>' : '📍 曲がる側の建物・看板を探す'}</div>
       ${photoHtml}
@@ -586,6 +674,7 @@ function showPracticeTurn(idx) {
   mapEl.style.display = 'block';
   const lm = landmarkName(turn);
   const cue = turn.turnCue || formatTurnCue(turn, lm);
+  document.getElementById('practiceAcc').innerHTML = turn.accident ? School.accidentBlockHtml(turn.accident) : '';
   document.getElementById('practiceLandmark').innerHTML = `<div class="turn-cue" style="margin-bottom:6px">${cue}</div>`
     + (lm ? `📍 目印: <strong>${lm}</strong>` : '📍 曲がる側の建物・看板を探す');
   const photoEl = document.getElementById('practicePhoto');
@@ -656,6 +745,12 @@ async function searchRoute() {
     state.goalLatLng = goalCoord;
     state.startLabel = startQ;
     state.goalLabel = goalQ;
+    checkBounds(startCoord.lat, startCoord.lng, startQ);
+    checkBounds(goalCoord.lat, goalCoord.lng, goalQ);
+    const gh = document.getElementById('goalHint');
+    const hint = School.destinationHint(goalQ);
+    if (hint) { gh.textContent = '到着前: ' + hint; gh.classList.add('show'); }
+    else gh.classList.remove('show');
 
     if (state.routeLayer) map.removeLayer(state.routeLayer);
     state.markerLayers.forEach(m => map.removeLayer(m));
@@ -687,6 +782,7 @@ async function searchRoute() {
       };
     });
     state.turnData = turns;
+    School.attachToTurns(turns);
     addTurnMarkers(turns);
 
     const nTurns = turns.filter(t => isKeyTurn(t)).length;
@@ -709,6 +805,14 @@ async function searchRoute() {
       for (const i of keyIdx) {
         const t = turns[i];
         try {
+          if (applyPackLandmarkToTurn(t)) {
+            t.landmarkLoading = false;
+            done += 1;
+            document.getElementById('loadingBar').style.width = Math.round((done / keyIdx.length) * 100) + '%';
+            renderTurnsList(turns);
+            await sleep(80);
+            continue;
+          }
           const lms = await fetchLandmarks(t.lat, t.lng);
           const schools = lms.filter(el => el.tags?.amenity === 'school' || el.tags?.amenity === 'kindergarten');
           if (schools.length) { t.nearSchool = true; schoolNearCount += 1; }
@@ -749,6 +853,19 @@ document.getElementById('goalInput').addEventListener('keydown', e => { if (e.ke
 document.getElementById('departTime').addEventListener('change', () => {
   if (state.turnData.length) renderSafetyPanel(state.turnData, state.turnData.filter(t => t.nearSchool).length);
 });
+
+(async function bootstrap() {
+  await School.init();
+  School.updateHeader();
+  School.renderFooter();
+  School.renderPresets('presetRow', p => { School.applyPreset(p); });
+  const b = document.getElementById('schoolBanner');
+  if (b && School.pack) {
+    b.textContent = `${School.pack.name} 周辺（約${School.pack.radiusKm}km）· 事故データ ${School.accidents?.totalAccidents ?? 0}件（${School.accidents?.year || ''}年）`;
+  }
+  document.body.classList.add('simple-mode');
+  state.simpleMode = true;
+})();
 </script>
 </body>
 </html>

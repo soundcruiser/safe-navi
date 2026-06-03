@@ -1,0 +1,51 @@
+{
+  "id": "toyota-chuo",
+  "name": "トヨタ中央自動車学校",
+  "shortName": "トヨ中",
+  "address": "愛知県豊田市三軒町8-18",
+  "center": { "lat": 35.0879, "lng": 137.1568 },
+  "bounds": {
+    "minLat": 35.038,
+    "maxLat": 35.138,
+    "minLng": 137.098,
+    "maxLng": 137.218
+  },
+  "radiusKm": 5,
+  "presets": [
+    {
+      "id": "school-to-station",
+      "label": "教習所 → 豊田市駅",
+      "start": "トヨタ中央自動車学校",
+      "goal": "豊田市駅",
+      "departTime": "10:00"
+    },
+    {
+      "id": "station-to-school",
+      "label": "豊田市駅 → 教習所",
+      "start": "豊田市駅",
+      "goal": "トヨタ中央自動車学校",
+      "departTime": "16:00"
+    },
+    {
+      "id": "school-to-city-hall",
+      "label": "教習所 → 豊田市役所",
+      "start": "トヨタ中央自動車学校",
+      "goal": "豊田市役所",
+      "departTime": "10:00"
+    }
+  ],
+  "destinationHints": {
+    "豊田市駅": "駅前は歩行者・タクシーが多い。到着前に送迎場所を確認。",
+    "トヨタ中央自動車学校": "エディオン豊田本店付近。校内進入は徐行。"
+  },
+  "landmarks": {
+    "35.0880,137.1570": {
+      "name": "エディオン豊田本店",
+      "cue": "エディオンを右手に見て進入",
+      "note": "教習所正面の目印"
+    }
+  },
+  "intersectionNotes": {
+    "c_station_01": "市駅周辺は送迎・横断歩道が多い。信号は青でも左右を確認。"
+  }
+}
