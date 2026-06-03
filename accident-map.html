@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAFENAVI — 事故マップ（教習エリア）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans JP', system-ui, sans-serif; background: #0d1117; color: #e6edf3; height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+  header {
+    padding: 10px 14px; background: #161b22; border-bottom: 2px solid #f0a500;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex-shrink: 0;
+  }
+  header h1 { font-size: 16px; font-weight: 900; color: #f0a500; }
+  header p { font-size: 11px; color: #8b949e; flex: 1; min-width: 200px; }
+  header a { color: #93c5fd; font-size: 12px; font-weight: 700; text-decoration: none; }
+  #map { flex: 1; min-height: 0; }
+  .panel {
+    position: absolute; bottom: 12px; left: 12px; right: 12px; max-width: 420px;
+    z-index: 900; background: rgba(13,17,23,0.94); border: 1px solid #30363d;
+    border-radius: 12px; padding: 12px; font-size: 11px; line-height: 1.55; color: #8b949e;
+  }
+  .panel strong { color: #e6edf3; }
+  .legend { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<header>
+  <h1>事故マップ</h1>
+  <p id="mapSubtitle">読み込み中…</p>
+  <a href="safe-navi.html">← ルート予習へ</a>
+</header>
+<div id="map"></div>
+<div class="panel" id="infoPanel">
+  <strong>使い方</strong> 丸をクリックすると件数と注意の目安が出ます。個別事故の詳細は表示しません。
+  <div class="legend">
+    <span><i style="background:#eab308"></i>1件</span>
+    <span><i style="background:#f0a500"></i>2件以上</span>
+    <span><i style="background:#f97316"></i>5件以上</span>
+    <span><i style="background:#ef4444"></i>死亡事故あり</span>
+  </div>
+</div>
+<script src="js/school.js"></script>
+<script src="js/accident-map.js"></script>
+<script>
+const map = L.map('map', { center: [35.0879, 137.1568], zoom: 14 });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  attribution: '© OSM © CARTO', maxZoom: 20, subdomains: 'abcd',
+}).addTo(map);
+
+(async () => {
+  await School.init();
+  const sub = document.getElementById('mapSubtitle');
+  const period = AccidentMap.yearLabel();
+  sub.textContent = `${School.pack?.name || ''} 周辺 · ${period} · ${School.accidents?.totalAccidents ?? 0}件 / ${School.accidents?.clusterCount ?? 0}地点`;
+  AccidentMap.init(map);
+  AccidentMap.render(School.accidents?.clusters || [], { bounds: true });
+  AccidentMap.setVisible(true);
+  AccidentMap.fitToArea();
+  setTimeout(() => map.invalidateSize(), 200);
+})();
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@
 
 使い方:
   python3 scripts/build-accidents.py
+  python3 scripts/build-accidents.py --years 2021,2022,2023
   python3 scripts/build-accidents.py --csv path/to/honhyo_2024.csv
 """
 from __future__ import annotations
@@ -124,12 +125,13 @@ def band_for_hour(h: int | None) -> str | None:
     return None
 
 
-def build_hints(cluster: dict) -> list[str]:
+def build_hints(cluster: dict, year_from: str, year_to: str) -> list[str]:
     hints = []
     total = cluster["total"]
     if total == 0:
         return hints
-    hints.append(f"この付近（約50m圏内）では集計期間中に交通事故が {total} 件記録されています。")
+    period = year_from if year_from == year_to else f"{year_from}〜{year_to}"
+    hints.append(f"この付近（約50m圏内）では {period} 年に交通事故が {total} 件記録されています（教習エリア内の集計）。")
     if cluster["fatal"] > 0:
         hints.append(f"うち死亡事故が {cluster['fatal']} 件あります。十分な減速と左右・進路の確認を。")
     if cluster["injury"] > 0 and cluster["injury"] >= max(2, total // 2):
@@ -149,7 +151,7 @@ def build_hints(cluster: dict) -> list[str]:
     return hints
 
 
-def aggregate(points: list[dict]) -> list[dict]:
+def aggregate(points: list[dict], year_from: str, year_to: str) -> list[dict]:
     buckets: dict[str, dict] = {}
     for p in points:
         key = grid_key(p["lat"], p["lng"])
@@ -184,7 +186,7 @@ def aggregate(points: list[dict]) -> list[dict]:
     clusters = []
     for c in buckets.values():
         c["hourBands"] = dict(c["hourBands"])
-        c["hints"] = build_hints(c)
+        c["hints"] = build_hints(c, year_from, year_to)
         c["radiusM"] = 50
         clusters.append(c)
     clusters.sort(key=lambda x: -x["total"])
@@ -213,49 +215,53 @@ def read_csv(path: Path, bounds: dict) -> list[dict]:
     return points
 
 
+def load_year_csv(year: str, bounds: dict) -> list[dict]:
+    cache = ROOT / "scripts" / f"honhyo_{year}.csv"
+    if not cache.exists():
+        url = f"https://www.npa.go.jp/publications/statistics/koutsuu/opendata/{year}/honhyo_{year}.csv"
+        download_csv(url, cache)
+    print(f"Reading {cache} ...")
+    return read_csv(cache, bounds)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--csv", type=Path, help="本票CSVのローカルパス")
-    parser.add_argument("--year", default="2023", help="ダウンロードする年")
+    parser.add_argument("--csv", type=Path, help="単一年の本票CSV（--yearsより優先）")
+    parser.add_argument("--year", default="2023", help="単一年モード（--csv未指定時）")
+    parser.add_argument("--years", default="2021,2022,2023", help="複数年をカンマ区切りで集計")
     args = parser.parse_args()
 
     bounds, center = load_bounds()
-    cache = ROOT / "scripts" / f"honhyo_{args.year}.csv"
+    years: list[str] = []
 
     if args.csv:
-        csv_path = args.csv
-    elif cache.exists():
-        csv_path = cache
+        points = read_csv(args.csv, bounds)
+        years = [args.year]
     else:
-        url = f"https://www.npa.go.jp/publications/statistics/koutsuu/opendata/{args.year}/honhyo_{args.year}.csv"
-        try:
-            csv_path = download_csv(url, cache)
-        except Exception as e:
-            print(f"Download failed: {e}", file=sys.stderr)
-            print("Generating minimal placeholder from bounds center.", file=sys.stderr)
-            clusters = []
-            OUT.parent.mkdir(parents=True, exist_ok=True)
-            meta = {
-                "source": "警察庁交通事故統計オープンデータ（未取得）",
-                "year": args.year,
-                "bounds": bounds,
-                "center": center,
-                "clusterCount": 0,
-                "totalAccidents": 0,
-                "generatedAt": __import__("datetime").date.today().isoformat(),
-                "clusters": [],
-                "disclaimer": "過去の統計データです。現在の危険度を保証しません。",
-            }
-            OUT.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-            return
+        years = [y.strip() for y in args.years.split(",") if y.strip()]
+        if len(years) == 1 and args.year not in years:
+            years = [args.year]
+        points = []
+        for year in years:
+            try:
+                points.extend(load_year_csv(year, bounds))
+            except Exception as e:
+                print(f"Skip {year}: {e}", file=sys.stderr)
 
-    print(f"Reading {csv_path} ...")
-    points = read_csv(csv_path, bounds)
-    clusters = aggregate(points)
+    if not points:
+        print("No accident points; writing empty dataset.", file=sys.stderr)
+        years = years or [args.year]
+
+    year_from = min(years)
+    year_to = max(years)
+    clusters = aggregate(points, year_from, year_to)
     meta = {
         "source": "警察庁交通事故統計オープンデータ（本票）",
         "sourceUrl": "https://www.npa.go.jp/publications/statistics/koutsuu/opendata/index_opendata.html",
-        "year": args.year,
+        "year": year_to,
+        "yearFrom": year_from,
+        "yearTo": year_to,
+        "years": years,
         "bounds": bounds,
         "center": center,
         "clusterCount": len(clusters),
@@ -266,7 +272,7 @@ def main():
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Wrote {len(clusters)} clusters ({len(points)} points) -> {OUT}")
+    print(f"Wrote {len(clusters)} clusters ({len(points)} points, {year_from}-{year_to}) -> {OUT}")
 
 
 if __name__ == "__main__":

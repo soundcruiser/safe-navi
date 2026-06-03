@@ -145,11 +145,14 @@ const School = {
   renderFooter() {
     const el = document.getElementById('legalFooter');
     if (!el) return;
-    const y = this.accidents?.year || '—';
+    const period = this.accidents?.yearFrom && this.accidents?.yearTo
+      ? `${this.accidents.yearFrom}〜${this.accidents.yearTo}年`
+      : `${this.accidents?.year || '—'}年`;
     const gen = this.accidents?.generatedAt || '—';
     el.innerHTML = `
       <p><strong>データ出典:</strong> ${this.accidents?.source || '—'}
-        (<a href="${this.accidents?.sourceUrl || '#'}" target="_blank" rel="noopener">警察庁</a> ${y}年・教習エリア内 ${this.accidents?.totalAccidents ?? 0}件 / 集計日 ${gen})</p>
+        (<a href="${this.accidents?.sourceUrl || '#'}" target="_blank" rel="noopener">警察庁</a> ${period}・教習エリア内 ${this.accidents?.totalAccidents ?? 0}件 / 集計日 ${gen})
+        · <a href="accident-map.html">事故マップ（全画面）</a></p>
       <p>${this.accidents?.disclaimer || '過去の統計であり、現在の危険を保証しません。'}</p>
       <p>運転中のナビ・判断は Google マップ等の本番ナビに従ってください。SAFENAVI は出発前の予習用です。</p>`;
   },

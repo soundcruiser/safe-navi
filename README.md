@@ -24,12 +24,19 @@ python3 -m http.server 8765
 - https://soundcruiser.github.io/safe-navi/
 - 他校パック（将来）: `?school=toyota-chuo`
 
+## 事故マップ
+
+- **ルート画面**: 地図右上の「事故マップ」でクラスタ表示（ルート上の曲がり付近を強調）
+- **全画面**: [accident-map.html](accident-map.html)（教室投影向け）
+
 ## データ更新（事故統計）
 
+直近 **3年分**（デフォルト 2021〜2023）を教習エリア内で集計します。
+
 ```bash
+python3 scripts/build-accidents.py --years 2021,2022,2023
+# 単年のみ
 python3 scripts/build-accidents.py --year 2023
-# またはローカルCSVを指定
-python3 scripts/build-accidents.py --csv scripts/honhyo_2023.csv
 ```
 
 出力: `data/toyota-chuo/accidents.json`  
