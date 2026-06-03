@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAFENAVI — 安全到着のためのルート予習</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Bebas+Neue&display=swap');
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2330;
+    --accent: #f0a500; --accent2: #e05c00; --safe: #22c55e; --danger: #ef4444;
+    --text: #e6edf3; --muted: #8b949e; --border: #30363d; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { background: var(--panel); border-bottom: 2px solid var(--accent); padding: 10px 16px; flex-shrink: 0; }
+  .logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--accent); letter-spacing: 3px; }
+  .logo span { color: var(--text); }
+  .tagline { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .main { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+  .sidebar { width: 340px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+  .section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .section-title { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 2px; margin-bottom: 10px; }
+  .input-group { display: flex; flex-direction: column; gap: 8px; }
+  .input-row { display: flex; align-items: center; gap: 8px; background: var(--panel2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; }
+  .input-row:focus-within { border-color: var(--accent); }
+  .input-row input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: 13px; font-family: inherit; }
+  .safe-options { display: flex; flex-direction: column; gap: 12px; }
+  .option-row { display: flex; align-items: center; gap: 10px; }
+  .option-label { font-size: 12px; color: var(--muted); flex: 1; }
+  .option-label strong { display: block; color: var(--text); font-size: 13px; }
+  .toggle { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+  .toggle input { display: none; }
+  .toggle-track { position: absolute; inset: 0; background: var(--border); border-radius: 12px; cursor: pointer; }
+  .toggle input:checked + .toggle-track { background: var(--accent); }
+  .toggle-track::after { content: ''; position: absolute; width: 18px; height: 18px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: transform 0.2s; }
+  .toggle input:checked + .toggle-track::after { transform: translateX(20px); }
+  .value-banner { margin-bottom: 10px; padding: 10px 12px; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.35); border-radius: 10px; font-size: 11px; line-height: 1.55; color: var(--muted); }
+  .value-banner strong { color: #a5b4fc; }
+  .time-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .time-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .time-row input { flex: 1; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 8px; color: var(--text); font-family: inherit; font-size: 13px; }
+  .safety-panel { display: none; padding: 0 16px 12px; }
+  .safety-panel.visible { display: block; }
+  .safety-score-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .safety-badge { display: inline-flex; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; border: 1px solid var(--safe); background: rgba(34,197,94,0.15); color: var(--safe); }
+  .safety-hints { font-size: 11px; color: var(--muted); line-height: 1.6; background: var(--panel2); border-radius: 8px; padding: 10px; border: 1px solid var(--border); }
+  .safety-hints li { margin-left: 1.1em; margin-bottom: 4px; }
+  .turn-cue { font-size: 12px; color: #a5b4fc; margin-bottom: 6px; line-height: 1.45; }
+  .turn-warn { font-size: 11px; color: #fca5a5; margin-bottom: 6px; }
+  .search-btn { width: 100%; padding: 13px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; border-radius: var(--radius); color: #000; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .search-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .error-msg { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #fca5a5; margin-top: 10px; display: none; }
+  .route-actions { display: none; flex-direction: column; gap: 10px; }
+  .route-actions.visible { display: flex; }
+  .workflow-steps { font-size: 11px; color: var(--muted); line-height: 1.7; padding-left: 1.1em; margin-bottom: 8px; }
+  .btn-practice { width: 100%; padding: 12px; border: none; border-radius: var(--radius); background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; font-family: inherit; }
+  .btn-google { width: 100%; padding: 11px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel2); color: var(--text); font-weight: 700; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .btn-google:hover { border-color: #4285f4; color: #93c5fd; }
+  .route-stats { display: none; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .stat-card { background: var(--panel2); border-radius: 8px; padding: 10px 8px; text-align: center; border: 1px solid var(--border); }
+  .stat-value { font-size: 20px; font-weight: 900; color: var(--accent); }
+  .stat-label { font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .turn-tabs { display: flex; gap: 6px; padding: 8px 16px 0; }
+  .turn-tab { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel2); color: var(--muted); font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .turn-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(240,165,0,0.12); }
+  .turns-list { flex: 1; overflow-y: auto; padding: 10px 16px 16px; }
+  .turn-card { background: var(--panel2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
+  .turn-card:hover, .turn-card.active { border-color: var(--accent); }
+  .turn-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .turn-num { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #000; font-weight: 900; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+  .turn-card-title { font-size: 15px; font-weight: 900; flex: 1; }
+  .turn-card-meta { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .turn-landmark { font-size: 13px; color: var(--accent); margin-bottom: 8px; line-height: 1.5; }
+  .turn-card-map { width: 100%; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 8px; background: var(--panel2); }
+  .landmark-photo { width: 100%; max-height: 140px; object-fit: cover; border-radius: 8px; border: 2px solid var(--accent); margin-bottom: 8px; cursor: pointer; background: var(--panel2); }
+  .img-placeholder { width: 100%; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--muted); background: var(--panel2); border-radius: 8px; border: 1px dashed var(--border); margin-bottom: 8px; text-align: center; padding: 8px; }
+  .turn-card-actions { display: flex; gap: 8px; }
+  .turn-link-btn { flex: 1; text-align: center; padding: 7px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 11px; font-weight: 700; text-decoration: none; font-family: inherit; cursor: pointer; }
+  .map-wrap { flex: 1; min-width: 0; min-height: 0; position: relative; }
+  #map { width: 100%; height: 100%; min-height: 280px; background: #1a2332; }
+  .practice-panel { position: absolute; inset: 12px; z-index: 900; background: rgba(13,17,23,0.97); border: 1px solid var(--border); border-radius: 16px; padding: 18px; display: none; flex-direction: column; overflow-y: auto; }
+  .practice-panel.open { display: flex; }
+  .practice-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .practice-counter { font-size: 12px; color: var(--accent); font-weight: 700; }
+  .practice-close { background: var(--panel2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; }
+  .practice-arrow-big { font-size: 64px; text-align: center; line-height: 1; }
+  .practice-title { font-size: 22px; font-weight: 900; text-align: center; }
+  .practice-road { text-align: center; font-size: 13px; color: var(--muted); margin: 6px 0 12px; }
+  .practice-map { width: 100%; height: 120px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 10px; }
+  .practice-landmark { text-align: center; font-size: 15px; color: var(--accent); font-weight: 700; margin-bottom: 12px; line-height: 1.5; }
+  .practice-nav { display: flex; gap: 8px; margin-top: auto; }
+  .practice-nav button, .practice-nav a { flex: 1; padding: 12px 8px; border-radius: 10px; font-size: 13px; font-weight: 700; font-family: inherit; text-align: center; text-decoration: none; cursor: pointer; border: 1px solid var(--border); background: var(--panel2); color: var(--text); }
+  .practice-nav a.street { border: none; background: linear-gradient(135deg, #4285f4, #1a73e8); color: #fff; }
+  .loading-bar { height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 0; position: fixed; top: 0; left: 0; z-index: 9999; transition: width 0.3s; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000; display: none; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal-box { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px; max-width: 440px; width: 90%; }
+  .modal-img { width: 100%; border-radius: 10px; max-height: 280px; object-fit: cover; }
+  .modal-close { margin-top: 14px; width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); cursor: pointer; font-family: inherit; }
+  .start-marker-inner, .end-marker-inner { border: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+  .start-marker-inner { background: var(--safe); }
+  .end-marker-inner { background: var(--danger); }
+  .custom-turn-marker { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+  @media (max-width: 600px) { .sidebar { width: 100%; max-height: 45vh; } .main { flex-direction: column; } }
+</style>
+</head>
+<body>
+<div class="loading-bar" id="loadingBar"></div>
+<header>
+  <div class="logo">SAFE<span>NAVI</span></div>
+    <div class="tagline">出発前に目印で覚える · 運転中は Google マップ</div>
+</header>
+<div class="main">
+  <div class="sidebar">
+    <div class="section">
+      <div class="section-title">📍 ルート</div>
+      <div class="input-group">
+        <div class="input-row">
+          <span>🟢</span>
+          <input type="text" id="startInput" value="トヨタ中央自動車学校" placeholder="出発地">
+        </div>
+        <div class="input-row">
+          <span>🔴</span>
+          <input type="text" id="goalInput" value="豊田市駅" placeholder="目的地">
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">🛡️ ルートの取り方</div>
+      <div class="safe-options">
+        <div class="option-row">
+          <div class="option-label"><strong>広い道を優先</strong>幹線・国道寄り</div>
+          <label class="toggle"><input type="checkbox" id="toggleWideRoad" checked><div class="toggle-track"></div></label>
+        </div>
+        <div class="option-row">
+          <div class="option-label"><strong>曲がりを少なく</strong>右左折を減らす</div>
+          <label class="toggle"><input type="checkbox" id="toggleMinTurns" checked><div class="toggle-track"></div></label>
+        </div>
+        <div class="option-row">
+          <div class="option-label"><strong>曲がり角に目印</strong>曲がる側の施設を優先</div>
+          <label class="toggle"><input type="checkbox" id="toggleLandmark" checked><div class="toggle-track"></div></label>
+        </div>
+        <div class="option-row">
+          <div class="option-label"><strong>学校周辺を抑えた候補</strong>ルート候補の簡易安全度</div>
+          <label class="toggle"><input type="checkbox" id="toggleSaferRoute" checked><div class="toggle-track"></div></label>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="time-row">
+        <label for="departTime">出発予定</label>
+        <input type="time" id="departTime" value="10:00">
+      </div>
+      <div class="value-banner">
+        <strong>安全到着の3層：</strong>①ここで曲がりと目印を覚える → ②本番はナビに任せる → ③到着前に目的地周辺を確認
+      </div>
+      <button class="search-btn" id="searchBtn" onclick="searchRoute()">🔍 ルートを調べる</button>
+      <div class="error-msg" id="errorMsg"></div>
+    </div>
+    <div class="section route-actions" id="routeActions">
+      <div class="section-title">✅ ルート確定</div>
+      <ol class="workflow-steps">
+        <li><strong>事前</strong> — 曲がりと「曲がる側の目印」を確認</li>
+        <li><strong>運転中</strong> — Googleマップでナビ（判断はナビへ）</li>
+        <li><strong>到着前</strong> — 目的地付近の進入・駐車を確認</li>
+      </ol>
+      <button type="button" class="btn-practice" onclick="openPracticeMode()">📖 曲がりを順番に確認</button>
+      <button type="button" class="btn-google" onclick="openGoogleNav()">🗺️ Googleマップで本番ナビ</button>
+    </div>
+    <div class="route-stats" id="routeStats">
+      <div class="stat-card"><div class="stat-value" id="statDist">—</div><div class="stat-label">km</div></div>
+      <div class="stat-card"><div class="stat-value" id="statTime">—</div><div class="stat-label">分</div></div>
+      <div class="stat-card"><div class="stat-value" id="statTurns">—</div><div class="stat-label">曲がり</div></div>
+    </div>
+    <div class="safety-panel" id="safetyPanel">
+      <div class="safety-score-row">
+        <span style="font-size:12px;color:var(--muted)">簡易安全度</span>
+        <span class="safety-badge" id="safetyBadge">—</span>
+      </div>
+      <ul class="safety-hints" id="safetyHints"></ul>
+    </div>
+    <div class="turn-tabs" id="turnTabs" style="display:none">
+      <button type="button" class="turn-tab active" data-mode="key" onclick="setTurnListMode('key')">曲がりだけ</button>
+      <button type="button" class="turn-tab" data-mode="all" onclick="setTurnListMode('all')">すべて</button>
+    </div>
+    <div class="turns-list" id="turnsList"></div>
+  </div>
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="practice-panel" id="practicePanel">
+      <div class="practice-top">
+        <span class="practice-counter" id="practiceCounter">1 / 1</span>
+        <button type="button" class="practice-close" onclick="closePracticeMode()">✕</button>
+      </div>
+      <div class="practice-arrow-big" id="practiceArrow">←</div>
+      <div class="practice-title" id="practiceTitle">左折</div>
+      <div class="practice-road" id="practiceRoad">—</div>
+      <img class="practice-map" id="practiceMap" src="" alt="交差点">
+      <img class="landmark-photo" id="practicePhoto" style="display:none" alt="目印">
+      <div class="practice-landmark" id="practiceLandmark">—</div>
+      <div class="practice-nav">
+        <button type="button" onclick="practiceStep(-1)">← 前</button>
+        <a class="street" id="practiceStreetView" href="#" target="_blank" rel="noopener">街並み</a>
+        <button type="button" onclick="practiceStep(1)">次 →</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal-box">
+    <div class="modal-title" id="modalTitle">📸 目印</div>
+    <img class="modal-img" id="modalImg" src="" alt="">
+    <button class="modal-close" onclick="closeModal()">閉じる</button>
+  </div>
+</div>
+<script>
+const map = L.map('map', { center: [35.082, 137.156], zoom: 13 });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  attribution: '© OSM © CARTO', maxZoom: 20, subdomains: 'abcd',
+}).addTo(map);
+window.addEventListener('load', () => setTimeout(() => map.invalidateSize(), 100));
+
+let state = {
+  startLatLng: null, goalLatLng: null, startLabel: '', goalLabel: '',
+  routeLayer: null, routeCoords: [], markerLayers: [],
+  turnData: [], listMode: 'key', practiceIdx: 0,
+};
+
+function setLoading(pct) { document.getElementById('loadingBar').style.width = pct + '%'; }
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 5000);
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function geocode(query) {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=jp`;
+  const res = await fetch(url, { headers: { 'Accept-Language': 'ja', Accept: 'application/json' } });
+  if (!res.ok) throw new Error('住所検索に失敗しました');
+  const data = await res.json();
+  if (!data.length) return null;
+  return { lat: +data[0].lat, lng: +data[0].lon, name: data[0].display_name };
+}
+
+function addMarker(lat, lng, type) {
+  state.markerLayers = state.markerLayers.filter(m => {
+    if (m._type === type) map.removeLayer(m);
+    return m._type !== type;
+  });
+  const html = type === 'start'
+    ? '<div class="start-marker-inner">S</div>'
+    : '<div class="end-marker-inner">G</div>';
+  const m = L.marker([lat, lng], {
+    icon: L.divIcon({ className: '', html, iconSize: [30, 30], iconAnchor: [12, 12] }),
+  }).addTo(map);
+  m._type = type;
+  state.markerLayers.push(m);
+}
+
+function getArrowFromManeuver(m) {
+  const mod = m.modifier || '';
+  const type = m.type || '';
+  if (type === 'depart') return { emoji: '🚦', label: '出発', cls: 'straight' };
+  if (type === 'arrive') return { emoji: '🏁', label: '到着', cls: 'straight' };
+  if (mod.includes('left') && mod.includes('sharp')) return { emoji: '↰', label: '鋭角左折', cls: 'left' };
+  if (mod.includes('right') && mod.includes('sharp')) return { emoji: '↱', label: '鋭角右折', cls: 'right' };
+  if (mod === 'left') return { emoji: '←', label: '左折', cls: 'left' };
+  if (mod === 'right') return { emoji: '→', label: '右折', cls: 'right' };
+  if (mod === 'uturn') return { emoji: '↩', label: 'Uターン', cls: 'left' };
+  return { emoji: '↑', label: '直進', cls: 'straight' };
+}
+
+function countTurns(route) {
+  return (route.legs?.[0]?.steps || []).filter(s => getArrowFromManeuver(s.maneuver).cls !== 'straight').length;
+}
+function scoreRoute(route, preferWide) {
+  const steps = route.legs?.[0]?.steps || [];
+  let score = countTurns(route) * 10;
+  if (preferWide) {
+    score -= steps.filter(s => s.name && s.distance > 80).length * 2;
+    if (route.distance / Math.max(steps.length, 1) > 120) score -= 5;
+  }
+  return score;
+}
+function routeKeyTurnCoords(route) {
+  const steps = route.legs?.[0]?.steps || [];
+  return steps
+    .filter(s => getArrowFromManeuver(s.maneuver).cls !== 'straight')
+    .map(s => ({ lat: s.maneuver.location[1], lng: s.maneuver.location[0] }));
+}
+async function countSchoolsNearRoute(route) {
+  const pts = routeKeyTurnCoords(route);
+  if (!pts.length) return 0;
+  const around = pts.map(p => `node["amenity"~"school|kindergarten"](around:120,${p.lat},${p.lng});`).join('');
+  const q = `[out:json][timeout:10];(${around});out body;`;
+  try {
+    const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', { method: 'POST', body: q }, 10000);
+    const ids = new Set(((await res.json()).elements || []).map(e => e.id));
+    return ids.size;
+  } catch { return 0; }
+}
+async function pickBestRoute(routes, minT, wide, preferSafer) {
+  if (!minT && !wide && !preferSafer) return routes[0];
+  if (!preferSafer || routes.length < 2) {
+    return routes.reduce((a, r) => scoreRoute(r, wide) < scoreRoute(a, wide) ? r : a, routes[0]);
+  }
+  const scored = await Promise.all(routes.map(async r => ({
+    route: r,
+    base: scoreRoute(r, wide),
+    schools: await countSchoolsNearRoute(r),
+  })));
+  scored.sort((a, b) => (a.base + a.schools * 8) - (b.base + b.schools * 8));
+  return scored[0].route;
+}
+async function fetchRoute(start, goal) {
+  const alt = document.getElementById('toggleMinTurns').checked
+    || document.getElementById('toggleWideRoad').checked
+    || document.getElementById('toggleSaferRoute').checked;
+  const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${goal.lng},${goal.lat}?overview=full&geometries=geojson&steps=true&alternatives=${alt}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('ルート計算に失敗しました');
+  const data = await res.json();
+  if (data.code !== 'Ok' || !data.routes?.length) throw new Error('ルートが見つかりません');
+  return pickBestRoute(
+    data.routes,
+    document.getElementById('toggleMinTurns').checked,
+    document.getElementById('toggleWideRoad').checked,
+    document.getElementById('toggleSaferRoute').checked,
+  );
+}
+
+async function fetchWithTimeout(url, opts = {}, ms = 4000) {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  try { return await fetch(url, { ...opts, signal: c.signal }); }
+  finally { clearTimeout(t); }
+}
+
+async function fetchLandmarks(lat, lng) {
+  const q = `[out:json][timeout:8];(
+    node["name"](around:150,${lat},${lng})["amenity"];
+    node["name"](around:150,${lat},${lng})["shop"];
+    node["name"](around:150,${lat},${lng})["tourism"];
+    node["amenity"~"convenience|supermarket|bank|fuel|restaurant|fast_food|cafe|pharmacy|hospital|police|post_office|school|hotel|parking"](around:150,${lat},${lng});
+  );out body 8;`;
+  try {
+    const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', { method: 'POST', body: q }, 8000);
+    const els = (await res.json()).elements || [];
+    return els.sort((a, b) => (b.tags?.name ? 1 : 0) - (a.tags?.name ? 1 : 0));
+  } catch { return []; }
+}
+
+async function fetchWikiThumbnail(wikiTag) {
+  const title = wikiTag.replace(/^(ja|en):/, '');
+  const lang = wikiTag.startsWith('en:') ? 'en' : 'ja';
+  try {
+    const res = await fetchWithTimeout(
+      `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+    );
+    const data = await res.json();
+    if (data.thumbnail?.source) return { url: data.thumbnail.source, name: data.title || title };
+  } catch {}
+  return null;
+}
+
+async function fetchLandmarkPhoto(lat, lng, landmark) {
+  if (landmark?.tags?.wikipedia) {
+    const w = await fetchWikiThumbnail(landmark.tags.wikipedia);
+    if (w) return w;
+  }
+  try {
+    const res = await fetchWithTimeout(
+      `https://commons.wikimedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=400&gslimit=5&format=json&origin=*`,
+    );
+    const items = (await res.json()).query?.geosearch || [];
+    for (const item of items) {
+      const imgRes = await fetchWithTimeout(
+        `https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(item.title)}&prop=pageimages&pithumbsize=600&format=json&origin=*`,
+      );
+      const page = Object.values((await imgRes.json()).query?.pages || {})[0];
+      if (page?.thumbnail?.source) return { url: page.thumbnail.source, name: item.title };
+    }
+  } catch {}
+  return null;
+}
+
+function latLngToTile(lat, lng, zoom) {
+  const latRad = lat * Math.PI / 180;
+  const n = 2 ** zoom;
+  return {
+    x: Math.floor((lng + 180) / 360 * n),
+    y: Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n),
+    z: zoom,
+  };
+}
+
+function staticMapUrl(lat, lng) {
+  const { x, y, z } = latLngToTile(lat, lng, 16);
+  return `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+}
+
+function imgFailMsg(label) {
+  const d = document.createElement('div');
+  d.className = 'img-placeholder';
+  d.textContent = label + 'を表示できません（右の地図で確認）';
+  return d;
+}
+
+function fmtDist(m) { return m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m'; }
+function isKeyTurn(t) { return t.arrow.cls !== 'straight'; }
+function getKeyTurnIndices() { return state.turnData.map((_, i) => i).filter(i => isKeyTurn(state.turnData[i])); }
+function streetViewUrl(lat, lng) {
+  return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+}
+function bearingDeg(lat1, lng1, lat2, lng2) {
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δλ = (lng2 - lng1) * Math.PI / 180;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+function relativeBearing(fromDeg, toDeg) {
+  return (toDeg - fromDeg + 540) % 360 - 180;
+}
+function landmarkName(turn) {
+  if (!turn.landmark) return '';
+  const t = turn.landmark.tags || {};
+  return t.name || t.amenity || t.shop || '';
+}
+function pickLandmarkOnTurnSide(turnLat, turnLng, approachDeg, arrow, candidates) {
+  if (!candidates?.length) return null;
+  const side = arrow.cls === 'left' ? -90 : arrow.cls === 'right' ? 90 : 0;
+  let best = null;
+  let bestScore = Infinity;
+  for (const lm of candidates) {
+    if (lm.lat == null || lm.lon == null) continue;
+    const rel = relativeBearing(approachDeg, bearingDeg(turnLat, turnLng, lm.lat, lm.lon));
+    const diff = side ? Math.abs(rel - side) : Math.abs(rel);
+    const score = diff + (lm.tags?.name ? 0 : 25);
+    if (score < bestScore) { bestScore = score; best = lm; }
+  }
+  return best;
+}
+function formatTurnCue(turn, name) {
+  if (!name) {
+    if (turn.arrow.cls === 'left') return '左手前の大きな建物・看板の方へ曲がる';
+    if (turn.arrow.cls === 'right') return '右手前の大きな建物・看板の方へ曲がる';
+    return turn.arrow.label;
+  }
+  if (turn.arrow.cls === 'left') return `左手前の「${name}」の方へ曲がる`;
+  if (turn.arrow.cls === 'right') return `右手前の「${name}」の方へ曲がる`;
+  return `「${name}」の方向へ`;
+}
+function getDepartHour() {
+  const v = document.getElementById('departTime')?.value || '10:00';
+  const h = parseInt(v.split(':')[0], 10);
+  return Number.isFinite(h) ? h : 10;
+}
+function buildTimeHints() {
+  const h = getDepartHour();
+  const hints = [];
+  if (h >= 7 && h <= 8) hints.push('通学時間帯: 学校周辺は児童・送迎車に注意');
+  if (h >= 15 && h <= 16) hints.push('下校時間帯: 学校・公園付近の歩行者に注意');
+  if (h >= 17 && h <= 19) hints.push('ラッシュ: 渋滞で判断が増えやすい — 本番ナビの案内に任せる');
+  if (h >= 18 || h <= 5) hints.push('夜間: 昼と違う見え方 — 目印は看板・明るい施設を優先');
+  if (h >= 22 || h <= 4) hints.push('深夜: 信号・横断歩道の確認をゆっくり');
+  return hints;
+}
+function computeSafetyScore(turns, schoolNearCount) {
+  const keyTurns = turns.filter(isKeyTurn).length;
+  let score = 100;
+  score -= keyTurns * 4;
+  score -= schoolNearCount * 6;
+  return Math.max(20, Math.min(100, Math.round(score)));
+}
+function renderSafetyPanel(turns, schoolNearCount) {
+  const score = computeSafetyScore(turns, schoolNearCount);
+  const badge = document.getElementById('safetyBadge');
+  badge.textContent = score >= 75 ? `◎ ${score}` : score >= 55 ? `○ ${score}` : `△ ${score}`;
+  badge.style.borderColor = score >= 75 ? 'var(--safe)' : score >= 55 ? 'var(--accent)' : '#f87171';
+  badge.style.color = score >= 75 ? 'var(--safe)' : score >= 55 ? 'var(--accent)' : '#fca5a5';
+  const ul = document.getElementById('safetyHints');
+  const items = [
+    '左右を覚えず「目印のある方へ」と曲がると負担が減ります',
+    ...buildTimeHints(),
+  ];
+  if (schoolNearCount > 0) items.push(`学校・幼稚園が曲がり付近に ${schoolNearCount} か所 — 減速・歩行者注意`);
+  items.push('事故多発地点の公式データは <a href="https://www.npa.go.jp/publications/statistics/koutsuu/opendata/index_opendata.html" target="_blank" rel="noopener">警察庁オープンデータ</a> で別途確認できます');
+  ul.innerHTML = items.map(t => `<li>${t}</li>`).join('');
+  document.getElementById('safetyPanel').classList.add('visible');
+}
+
+function renderTurnsList(turns) {
+  const el = document.getElementById('turnsList');
+  el.innerHTML = '';
+  const indices = state.listMode === 'key'
+    ? turns.map((_, i) => i).filter(i => isKeyTurn(turns[i]))
+    : turns.map((_, i) => i);
+  if (!indices.length) {
+    el.innerHTML = '<p style="font-size:12px;color:var(--muted)">曲がりがありません</p>';
+    return;
+  }
+  let n = 0;
+  indices.forEach(i => {
+    const turn = turns[i];
+    if (isKeyTurn(turn)) n++;
+    const num = state.listMode === 'key' ? n : i + 1;
+    const lm = landmarkName(turn);
+    const cue = turn.turnCue || formatTurnCue(turn, lm);
+    const card = document.createElement('div');
+    card.className = 'turn-card';
+    card.id = `turn-${i}`;
+    card.onclick = () => { map.setView([turn.lat, turn.lng], 17); highlightTurn(i); };
+    let photoHtml = '';
+    if (turn.photo) {
+      photoHtml = `<img class="landmark-photo" src="${turn.photo.url}" alt="目印" loading="lazy" onclick="event.stopPropagation();openModal(event,${i})" onerror="this.replaceWith(imgFailMsg('写真'))">`;
+    } else if (turn.landmarkLoading) {
+      photoHtml = '<div class="img-placeholder">📷 写真を探しています…</div>';
+    }
+    const warn = turn.nearSchool ? '<div class="turn-warn">⚠ 学校・幼稚園付近</div>' : '';
+    card.innerHTML = `
+      <div class="turn-card-head"><div class="turn-num">${num}</div><div class="turn-card-title">${turn.arrow.emoji} ${turn.arrow.label}</div></div>
+      <div class="turn-cue">${cue}</div>
+      <div class="turn-card-meta">${turn.instruction}</div>
+      ${warn}
+      <img class="turn-card-map" src="${staticMapUrl(turn.lat, turn.lng)}" alt="地図" loading="lazy" onerror="this.replaceWith(imgFailMsg('地図'))">
+      <div class="turn-landmark">${lm ? '📍 目印: <strong>' + lm + '</strong>' : '📍 曲がる側の建物・看板を探す'}</div>
+      ${photoHtml}
+      <div class="turn-card-actions">
+        <a class="turn-link-btn" href="${streetViewUrl(turn.lat, turn.lng)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">街並み</a>
+        <button type="button" class="turn-link-btn" onclick="event.stopPropagation();focusTurn(${i})">地図</button>
+      </div>`;
+    el.appendChild(card);
+  });
+}
+
+function focusTurn(i) {
+  const t = state.turnData[i];
+  if (t) { map.setView([t.lat, t.lng], 17); highlightTurn(i); }
+}
+function highlightTurn(i) {
+  document.querySelectorAll('.turn-card').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`turn-${i}`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+}
+
+function setTurnListMode(mode) {
+  state.listMode = mode;
+  document.querySelectorAll('.turn-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+  renderTurnsList(state.turnData);
+}
+
+function openGoogleNav() {
+  if (!state.startLatLng || !state.goalLatLng) { showError('先にルートを検索してください'); return; }
+  const o = encodeURIComponent(state.startLabel || `${state.startLatLng.lat},${state.startLatLng.lng}`);
+  const d = encodeURIComponent(state.goalLabel || `${state.goalLatLng.lat},${state.goalLatLng.lng}`);
+  window.open(`https://www.google.com/maps/dir/?api=1&origin=${o}&destination=${d}&travelmode=driving`, '_blank');
+}
+
+function openPracticeMode() {
+  const keys = getKeyTurnIndices();
+  if (!keys.length) { showError('曲がりがありません'); return; }
+  state.practiceIdx = keys[0];
+  document.getElementById('practicePanel').classList.add('open');
+  showPracticeTurn(keys[0]);
+}
+function closePracticeMode() { document.getElementById('practicePanel').classList.remove('open'); }
+
+function showPracticeTurn(idx) {
+  const keys = getKeyTurnIndices();
+  const turn = state.turnData[idx];
+  if (!turn) return;
+  const pos = keys.indexOf(idx);
+  document.getElementById('practiceCounter').textContent = `${pos + 1} / ${keys.length} か所`;
+  document.getElementById('practiceArrow').textContent = turn.arrow.emoji;
+  document.getElementById('practiceTitle').textContent = turn.arrow.label;
+  document.getElementById('practiceRoad').textContent = turn.instruction + (turn.road ? ' · ' + turn.road : '');
+  const mapEl = document.getElementById('practiceMap');
+  mapEl.src = staticMapUrl(turn.lat, turn.lng);
+  mapEl.onerror = () => { mapEl.style.display = 'none'; };
+  mapEl.style.display = 'block';
+  const lm = landmarkName(turn);
+  const cue = turn.turnCue || formatTurnCue(turn, lm);
+  document.getElementById('practiceLandmark').innerHTML = `<div class="turn-cue" style="margin-bottom:6px">${cue}</div>`
+    + (lm ? `📍 目印: <strong>${lm}</strong>` : '📍 曲がる側の建物・看板を探す');
+  const photoEl = document.getElementById('practicePhoto');
+  if (turn.photo) {
+    photoEl.src = turn.photo.url;
+    photoEl.style.display = 'block';
+    photoEl.onerror = () => { photoEl.style.display = 'none'; };
+    photoEl.onclick = e => { e.stopPropagation(); openModal(e, idx); };
+  } else {
+    photoEl.style.display = 'none';
+  }
+  document.getElementById('practiceStreetView').href = streetViewUrl(turn.lat, turn.lng);
+  map.setView([turn.lat, turn.lng], 17);
+  highlightTurn(idx);
+}
+
+function practiceStep(d) {
+  const keys = getKeyTurnIndices();
+  let p = keys.indexOf(state.practiceIdx);
+  if (p < 0) p = 0;
+  state.practiceIdx = keys[Math.max(0, Math.min(keys.length - 1, p + d))];
+  showPracticeTurn(state.practiceIdx);
+}
+
+function openModal(e, idx) {
+  e.stopPropagation();
+  const turn = state.turnData[idx];
+  if (!turn?.photo) return;
+  document.getElementById('modalTitle').textContent = '📸 ' + (landmarkName(turn) || '目印');
+  document.getElementById('modalImg').src = turn.photo.url;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modalOverlay') || e.target.tagName === 'BUTTON') {
+    document.getElementById('modalOverlay').classList.remove('open');
+  }
+}
+
+function addTurnMarkers(turns) {
+  turns.forEach((turn, i) => {
+    if (turn.arrow.cls === 'straight' && i > 0 && i < turns.length - 1) return;
+    const color = turn.arrow.cls === 'left' ? '#22c55e' : turn.arrow.cls === 'right' ? '#f0a500' : '#6366f1';
+    const m = L.marker([turn.lat, turn.lng], {
+      icon: L.divIcon({ className: '', html: `<div class="custom-turn-marker" style="background:${color}"></div>`, iconSize: [18, 18], iconAnchor: [9, 9] }),
+    }).bindTooltip(turn.arrow.emoji + ' ' + turn.arrow.label).addTo(map);
+    state.markerLayers.push(m);
+  });
+}
+
+async function searchRoute() {
+  const startQ = document.getElementById('startInput').value.trim();
+  const goalQ = document.getElementById('goalInput').value.trim();
+  if (!startQ || !goalQ) { showError('出発地と目的地を入力してください'); return; }
+
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = true;
+  btn.textContent = '検索中…';
+  setLoading(15);
+
+  try {
+    const startCoord = await geocode(startQ);
+    if (!startCoord) throw new Error(`「${startQ}」が見つかりません`);
+    await sleep(1100);
+    const goalCoord = await geocode(goalQ);
+    if (!goalCoord) throw new Error(`「${goalQ}」が見つかりません`);
+
+    state.startLatLng = startCoord;
+    state.goalLatLng = goalCoord;
+    state.startLabel = startQ;
+    state.goalLabel = goalQ;
+
+    if (state.routeLayer) map.removeLayer(state.routeLayer);
+    state.markerLayers.forEach(m => map.removeLayer(m));
+    state.markerLayers = [];
+    addMarker(startCoord.lat, startCoord.lng, 'start');
+    addMarker(goalCoord.lat, goalCoord.lng, 'goal');
+
+    const route = await fetchRoute(startCoord, goalCoord);
+    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+    state.routeCoords = coords;
+    state.routeLayer = L.polyline(coords, { color: '#f0a500', weight: 6, opacity: 0.9 }).addTo(map);
+    map.fitBounds(state.routeLayer.getBounds(), { padding: [40, 40] });
+
+    const steps = route.legs[0].steps;
+    const turns = steps.map((step, idx) => {
+      const loc = step.maneuver.location;
+      const arrow = getArrowFromManeuver(step.maneuver);
+      let approachDeg = step.maneuver.bearing_before;
+      if (approachDeg == null && idx > 0) {
+        const prev = steps[idx - 1].maneuver.location;
+        approachDeg = bearingDeg(prev[1], prev[0], loc[1], loc[0]);
+      }
+      if (approachDeg == null) approachDeg = step.maneuver.bearing_after ?? 0;
+      return {
+        lat: loc[1], lng: loc[0], arrow, approachDeg,
+        instruction: step.name ? `${arrow.label}（${step.name}）` : arrow.label,
+        road: step.name, distFromPrev: step.distance,
+        landmark: null, photo: null, turnCue: null, nearSchool: false,
+      };
+    });
+    state.turnData = turns;
+    addTurnMarkers(turns);
+
+    const nTurns = turns.filter(t => isKeyTurn(t)).length;
+    document.getElementById('statDist').textContent = (route.distance / 1000).toFixed(1);
+    document.getElementById('statTime').textContent = Math.round(route.duration / 60);
+    document.getElementById('statTurns').textContent = nTurns;
+    document.getElementById('routeStats').style.display = 'grid';
+    document.getElementById('turnTabs').style.display = 'flex';
+    document.getElementById('routeActions').classList.add('visible');
+
+    let schoolNearCount = 0;
+    renderTurnsList(turns);
+
+    const keyIdx = getKeyTurnIndices();
+    if (keyIdx.length) {
+      keyIdx.forEach(i => { turns[i].landmarkLoading = document.getElementById('toggleLandmark').checked; });
+      renderTurnsList(turns);
+
+      let done = 0;
+      for (const i of keyIdx) {
+        const t = turns[i];
+        try {
+          const lms = await fetchLandmarks(t.lat, t.lng);
+          const schools = lms.filter(el => el.tags?.amenity === 'school' || el.tags?.amenity === 'kindergarten');
+          if (schools.length) { t.nearSchool = true; schoolNearCount += 1; }
+          if (document.getElementById('toggleLandmark').checked && lms.length) {
+            t.landmark = pickLandmarkOnTurnSide(t.lat, t.lng, t.approachDeg, t.arrow, lms.filter(el => el.tags?.amenity !== 'school' && el.tags?.amenity !== 'kindergarten')) || lms[0];
+            t.turnCue = formatTurnCue(t, landmarkName(t));
+            t.photo = await fetchLandmarkPhoto(t.lat, t.lng, t.landmark);
+          } else if (isKeyTurn(t)) {
+            t.turnCue = formatTurnCue(t, '');
+          }
+        } catch { /* skip */ }
+        t.landmarkLoading = false;
+        done += 1;
+        document.getElementById('loadingBar').style.width = Math.round((done / keyIdx.length) * 100) + '%';
+        renderTurnsList(turns);
+        await sleep(200);
+      }
+      renderSafetyPanel(turns, schoolNearCount);
+      setTimeout(() => setLoading(0), 300);
+    } else {
+      renderSafetyPanel(turns, 0);
+    }
+
+    setLoading(100);
+    setTimeout(() => setLoading(0), 500);
+    map.invalidateSize();
+  } catch (err) {
+    showError(err.message || 'エラーが発生しました');
+    setLoading(0);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 ルートを調べる';
+  }
+}
+
+document.getElementById('startInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchRoute(); });
+document.getElementById('goalInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchRoute(); });
+document.getElementById('departTime').addEventListener('change', () => {
+  if (state.turnData.length) renderSafetyPanel(state.turnData, state.turnData.filter(t => t.nearSchool).length);
+});
+</script>
+</body>
+</html>
