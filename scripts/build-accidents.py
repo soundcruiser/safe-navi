@@ -23,6 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "toyota-chuo" / "accidents.json"
 PACK = ROOT / "data" / "toyota-chuo" / "school-pack.json"
+CODES = ROOT / "data" / "npa-codes.json"
 
 DEFAULT_CSV_URL = (
     "https://www.npa.go.jp/publications/statistics/koutsuu/opendata/2023/honhyo_2023.csv"
@@ -43,6 +44,34 @@ def load_bounds():
         pack = json.load(f)
     b = pack["bounds"]
     return b, pack.get("center", {})
+
+
+def load_codes():
+    with open(CODES, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def label(map_dict: dict, code: str) -> str:
+    c = (code or "").strip()
+    if not c:
+        return ""
+    return map_dict.get(c, map_dict.get(c.zfill(2), f"コード{c}"))
+
+
+def accident_category(type_code: str) -> str:
+    c = (type_code or "").strip().zfill(2)
+    if not c.isdigit():
+        return "その他"
+    n = int(c)
+    if 1 <= n <= 20:
+        return "人対車両"
+    if 21 <= n <= 40:
+        return "車両相互"
+    if 41 <= n <= 60:
+        return "車両単独"
+    if n == 61:
+        return "列車"
+    return label(load_codes().get("accidentType", {}), c) or "その他"
 
 
 def dms_to_deg(s: str, is_lng: bool = False) -> float | None:
@@ -82,7 +111,7 @@ def find_col(headers: list[str], *candidates: str) -> str | None:
     return None
 
 
-def parse_row(row: dict, lat_col: str, lng_col: str, bounds: dict) -> dict | None:
+def parse_row(row: dict, lat_col: str, lng_col: str, bounds: dict, codes: dict) -> dict | None:
     lat = dms_to_deg(row.get(lat_col, ""), False)
     lng = dms_to_deg(row.get(lng_col, ""), True)
     if lat is None or lng is None:
@@ -93,9 +122,9 @@ def parse_row(row: dict, lat_col: str, lng_col: str, bounds: dict) -> dict | Non
     content_col = find_col(list(row.keys()), "事故内容", "事故の内容")
     content = row.get(content_col or "", "").strip()
     severity = "unknown"
-    if content in ("1", "死亡"):
+    if content in ("1", "01", "死亡"):
         severity = "fatal"
-    elif content in ("2", "負傷"):
+    elif content in ("2", "02", "負傷"):
         severity = "injury"
 
     hour_col = find_col(list(row.keys()), "発生日時　　時", "発生日時  時", "発生時刻　　時")
@@ -103,10 +132,26 @@ def parse_row(row: dict, lat_col: str, lng_col: str, bounds: dict) -> dict | Non
     if hour_col and row.get(hour_col, "").strip().isdigit():
         hour = int(row[hour_col].strip())
 
-    party_col = find_col(list(row.keys()), "当事者種別", "当事者種別（当事者1）")
-    party = row.get(party_col or "", "").strip()
+    type_col = find_col(list(row.keys()), "事故類型")
+    type_code = row.get(type_col or "", "").strip().zfill(2) if type_col else ""
+    type_label = label(codes.get("accidentType", {}), type_code)
+    category = accident_category(type_code)
 
-    return {"lat": lat, "lng": lng, "severity": severity, "hour": hour, "party": party}
+    road_col = find_col(list(row.keys()), "道路形状")
+    road_code = row.get(road_col or "", "").strip().zfill(2) if road_col else ""
+    road_label = label(codes.get("roadShape", {}), road_code)
+
+    pa_col = find_col(list(row.keys()), "当事者種別（当事者A）", "当事者種別")
+    pb_col = find_col(list(row.keys()), "当事者種別（当事者B）")
+    party_a = label(codes.get("partyType", {}), row.get(pa_col or "", "").strip().zfill(2))
+    party_b = label(codes.get("partyType", {}), row.get(pb_col or "", "").strip().zfill(2)) if pb_col else ""
+
+    return {
+        "lat": lat, "lng": lng, "severity": severity, "hour": hour,
+        "typeCode": type_code, "typeLabel": type_label, "category": category,
+        "roadCode": road_code, "roadLabel": road_label,
+        "partyA": party_a, "partyB": party_b,
+    }
 
 
 def grid_key(lat: float, lng: float) -> str:
@@ -147,8 +192,39 @@ def build_hints(cluster: dict, year_from: str, year_to: str) -> list[str]:
     if cluster.get("partyBike", 0) >= 2:
         hints.append("自転車関連の記録があります。車線の右端と自転車に注意。")
 
+    types = cluster.get("typeCounts") or {}
+    if types:
+        top = sorted(types.items(), key=lambda x: -x[1])[:3]
+        hints.append("事故の種類: " + "、".join(f"{k} {v}件" for k, v in top) + "。")
+    roads = cluster.get("roadCounts") or {}
+    if roads:
+        top = sorted(roads.items(), key=lambda x: -x[1])[:2]
+        hints.append("道路の状況: " + "、".join(f"{k} {v}件" for k, v in top) + "。")
+    parties = cluster.get("partyCounts") or {}
+    if parties:
+        top = sorted(parties.items(), key=lambda x: -x[1])[:3]
+        hints.append("関係する当事者: " + "、".join(f"{k} {v}件" for k, v in top) + "。")
+
     hints.append("※過去の統計であり、現在の危険度を保証するものではありません。")
     return hints
+
+
+def top_counts(counter: dict, n: int = 4) -> dict:
+    return dict(sorted(counter.items(), key=lambda x: -x[1])[:n])
+
+
+def summarize_cluster(c: dict) -> str:
+    parts = []
+    if c.get("typeCounts"):
+        k = next(iter(sorted(c["typeCounts"].items(), key=lambda x: -x[1])))
+        parts.append(k[0])
+    if c.get("roadCounts"):
+        k = next(iter(sorted(c["roadCounts"].items(), key=lambda x: -x[1])))
+        parts.append(k[0])
+    if c.get("partyCounts"):
+        k = next(iter(sorted(c["partyCounts"].items(), key=lambda x: -x[1])))
+        parts.append(f"当事者:{k[0]}")
+    return " · ".join(parts) if parts else "交通事故記録あり"
 
 
 def aggregate(points: list[dict], year_from: str, year_to: str) -> list[dict]:
@@ -167,6 +243,9 @@ def aggregate(points: list[dict], year_from: str, year_to: str) -> list[dict]:
                 "hourBands": defaultdict(int),
                 "partyPed": 0,
                 "partyBike": 0,
+                "typeCounts": defaultdict(int),
+                "roadCounts": defaultdict(int),
+                "partyCounts": defaultdict(int),
             }
         c = buckets[key]
         c["total"] += 1
@@ -177,15 +256,25 @@ def aggregate(points: list[dict], year_from: str, year_to: str) -> list[dict]:
         b = band_for_hour(p["hour"])
         if b:
             c["hourBands"][b] += 1
-        party = p.get("party") or ""
-        if party in ("3", "4", "歩行者"):
-            c["partyPed"] += 1
-        if party in ("5", "6", "自転車"):
-            c["partyBike"] += 1
+        cat = p.get("category") or "その他"
+        c["typeCounts"][cat] += 1
+        if p.get("roadLabel"):
+            c["roadCounts"][p["roadLabel"]] += 1
+        for party in (p.get("partyA"), p.get("partyB")):
+            if party:
+                c["partyCounts"][party] += 1
+                if party == "歩行者":
+                    c["partyPed"] += 1
+                if party in ("自転車", "原付", "二輪"):
+                    c["partyBike"] += 1
 
     clusters = []
     for c in buckets.values():
         c["hourBands"] = dict(c["hourBands"])
+        c["typeCounts"] = top_counts(dict(c["typeCounts"]))
+        c["roadCounts"] = top_counts(dict(c["roadCounts"]))
+        c["partyCounts"] = top_counts(dict(c["partyCounts"]))
+        c["summary"] = summarize_cluster(c)
         c["hints"] = build_hints(c, year_from, year_to)
         c["radiusM"] = 50
         clusters.append(c)
@@ -199,7 +288,7 @@ def download_csv(url: str, dest: Path) -> Path:
     return dest
 
 
-def read_csv(path: Path, bounds: dict) -> list[dict]:
+def read_csv(path: Path, bounds: dict, codes: dict) -> list[dict]:
     points = []
     with open(path, encoding="shift_jis", errors="replace", newline="") as f:
         reader = csv.DictReader(f)
@@ -209,19 +298,12 @@ def read_csv(path: Path, bounds: dict) -> list[dict]:
         if not lat_col or not lng_col:
             raise RuntimeError(f"緯度経度列が見つかりません: {headers[:8]}...")
         for row in reader:
-            p = parse_row(row, lat_col, lng_col, bounds)
+            p = parse_row(row, lat_col, lng_col, bounds, codes)
             if p:
                 points.append(p)
     return points
 
 
-def load_year_csv(year: str, bounds: dict) -> list[dict]:
-    cache = ROOT / "scripts" / f"honhyo_{year}.csv"
-    if not cache.exists():
-        url = f"https://www.npa.go.jp/publications/statistics/koutsuu/opendata/{year}/honhyo_{year}.csv"
-        download_csv(url, cache)
-    print(f"Reading {cache} ...")
-    return read_csv(cache, bounds)
 
 
 def main():
@@ -232,10 +314,11 @@ def main():
     args = parser.parse_args()
 
     bounds, center = load_bounds()
+    codes = load_codes()
     years: list[str] = []
 
     if args.csv:
-        points = read_csv(args.csv, bounds)
+        points = read_csv(args.csv, bounds, codes)
         years = [args.year]
     else:
         years = [y.strip() for y in args.years.split(",") if y.strip()]
@@ -244,7 +327,11 @@ def main():
         points = []
         for year in years:
             try:
-                points.extend(load_year_csv(year, bounds))
+                cache = ROOT / "scripts" / f"honhyo_{year}.csv"
+                if not cache.exists():
+                    url = f"https://www.npa.go.jp/publications/statistics/koutsuu/opendata/{year}/honhyo_{year}.csv"
+                    download_csv(url, cache)
+                points.extend(read_csv(cache, bounds, codes))
             except Exception as e:
                 print(f"Skip {year}: {e}", file=sys.stderr)
 

@@ -105,6 +105,30 @@ const School = {
     return `<span class="acc-badge acc-${sev}">事故記録 ${cluster.total}件</span>`;
   },
 
+  accidentDetailHtml(cluster) {
+    if (!cluster) return '';
+    let html = '';
+    if (cluster.summary) {
+      html += `<p class="acc-summary"><strong>この付近の傾向:</strong> ${cluster.summary}</p>`;
+    }
+    const types = cluster.typeCounts || {};
+    if (Object.keys(types).length) {
+      html += '<p class="acc-detail-line"><strong>事故の種類</strong> ' +
+        Object.entries(types).map(([k, v]) => `${k} ${v}件`).join(' · ') + '</p>';
+    }
+    const roads = cluster.roadCounts || {};
+    if (Object.keys(roads).length) {
+      html += '<p class="acc-detail-line"><strong>道路</strong> ' +
+        Object.entries(roads).map(([k, v]) => `${k} ${v}件`).join(' · ') + '</p>';
+    }
+    const parties = cluster.partyCounts || {};
+    if (Object.keys(parties).length) {
+      html += '<p class="acc-detail-line"><strong>当事者</strong> ' +
+        Object.entries(parties).map(([k, v]) => `${k} ${v}件`).join(' · ') + '</p>';
+    }
+    return html;
+  },
+
   accidentBlockHtml(cluster) {
     if (!cluster) return '';
     const hints = (cluster.hints || []).map(h => `<li>${h}</li>`).join('');
@@ -112,6 +136,7 @@ const School = {
       ? `<p class="acc-instructor"><strong>指導員メモ:</strong> ${cluster.instructorNote}</p>` : '';
     return `<div class="acc-block">
       ${this.accidentBadgeHtml(cluster)}
+      ${this.accidentDetailHtml(cluster)}
       <ul class="acc-hints">${hints}</ul>${note}</div>`;
   },
 

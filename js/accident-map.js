@@ -29,11 +29,13 @@ const AccidentMap = {
   },
 
   popupHtml(c) {
-    const hints = (c.hints || []).slice(0, 4).map(h => `<li style="margin:4px 0 4px 1em">${h}</li>`).join('');
+    const hints = (c.hints || []).slice(0, 5).map(h => `<li style="margin:4px 0 4px 1em">${h}</li>`).join('');
     const note = School.instructorNote(c.id);
-    return `<div style="font-size:12px;line-height:1.5;max-width:260px">
+    const detail = School.accidentDetailHtml(c).replace(/class="acc-/g, 'style="margin:6px 0;font-size:11px;" class="acc-');
+    return `<div style="font-size:12px;line-height:1.5;max-width:280px">
       <strong>事故記録 ${c.total}件</strong>（負傷${c.injury || 0} / 死亡${c.fatal || 0}）<br>
-      <span style="color:#888">${AccidentMap.yearLabel()}・約50m圏内の集計</span>
+      <span style="color:#888">${AccidentMap.yearLabel()}・約50m圏内・警察庁統計</span>
+      ${detail}
       <ul style="margin:8px 0;padding:0">${hints}</ul>
       ${note ? `<p style="color:#a5b4fc"><strong>指導員:</strong> ${note}</p>` : ''}
     </div>`;

@@ -136,6 +136,8 @@
   .acc-high { background: rgba(239,68,68,0.25); color: #fca5a5; }
   .acc-hints { margin-left: 1.1em; color: var(--muted); line-height: 1.5; }
   .acc-instructor { margin-top: 6px; color: #a5b4fc; }
+  .acc-summary { font-size: 12px; color: #fde68a; margin-bottom: 6px; line-height: 1.45; }
+  .acc-detail-line { font-size: 11px; color: var(--text); margin-bottom: 4px; line-height: 1.45; }
   .toolbar-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
   .toolbar-row button { flex: 1; min-width: 90px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
   .legal-footer { padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); font-size: 10px; color: var(--muted); line-height: 1.55; border-top: 1px solid var(--border); background: var(--panel); flex-shrink: 0; }
@@ -312,7 +314,7 @@
 <script src="js/school.js"></script>
 <script src="js/accident-map.js"></script>
 <script>
-const map = L.map('map', { center: [35.0879, 137.1568], zoom: 14 });
+const map = L.map('map', { center: [35.08137, 137.14051], zoom: 14 });
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
   attribution: '© OSM © CARTO', maxZoom: 20, subdomains: 'abcd',
 }).addTo(map);
